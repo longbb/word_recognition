@@ -1,0 +1,7 @@
+# Ignore data file
+data/*
+viwiki_data/*
+# Ignore result file
+result_data/*
+#Ignore pyc file
+*.pyc
