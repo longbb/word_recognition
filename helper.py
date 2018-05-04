@@ -3,7 +3,6 @@ import re
 import csv
 import os
 import xml.etree.ElementTree as ET
-from lxml import etree
 import pickle
 
 class Helper(object):
@@ -12,8 +11,8 @@ class Helper(object):
 
     @staticmethod
     def clear_str(string):
-        char_special = ',|;|(|)|>|<|\'|\"'
-        str_clean = re.sub('[' + char_special + ']', '', string)
+        char_special = '\,|\;|\(|\)|\>|\<|\'|\"'
+        str_clean = re.sub('[' + char_special + ']', ' PUNC|SYSTEM_CODE ', string)
         str_clean = re.sub('[.]', ' ', str_clean)
         str_clean = str_clean.strip()
         return str_clean
@@ -50,7 +49,7 @@ class Helper(object):
         return data
 
     @staticmethod
-    def load_syllables_dictionary():
+    def load_syllables_dictionary(output_option='set'):
         module_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__))) + \
             '/word_recognition'
         path_to_dict = module_path + '/data/syllables_dictionary.txt'
@@ -58,7 +57,14 @@ class Helper(object):
         syllables_dictionary = []
         for line in dict_file:
             syllables_dictionary.append(line[:-1])
-        return set(syllables_dictionary)
+
+        if output_option == 'set':
+            return set(syllables_dictionary)
+
+        new_dict = {}
+        for index, syllable in enumerate(syllables_dictionary):
+            new_dict[syllable] = index
+        return new_dict
 
     @staticmethod
     def load_wiki_data(path_to_file):
@@ -92,3 +98,41 @@ class Helper(object):
     def load_obj(path_to_file):
         with open(path_to_file, 'rb') as f:
             return pickle.load(f)
+
+    @staticmethod
+    def read_vlsp_sentences(path_to_file):
+        xml_file = open(path_to_file, 'r')
+        doc_array = []
+        new_doc = ''
+        for line in xml_file:
+            if line[:6] == '<pBody':
+                new_doc = ''
+            elif line[:7] == '</pBody':
+                doc_array.append(new_doc)
+            else:
+                new_doc += line
+        return doc_array
+
+
+    @staticmethod
+    def read_dictionary(path_to_dict):
+        dictionary = set()
+        dict_file = open(path_to_dict, 'r')
+        for line in dict_file:
+            if '##' in line:
+                index = line.rfind('#')
+                word = line[index+1:-1]
+                # import pdb; pdb.set_trace()
+                word = word.replace(" ", "_")
+                dictionary.add(word)
+        return dictionary
+
+    @staticmethod
+    def read_new_dictionary(path_to_dict):
+        dictionary = set()
+        dict_file = open(path_to_dict, 'r')
+        for line in dict_file:
+            word = line.split('\t')[0]
+            # import pdb; pdb.set_trace()
+            dictionary.add(word)
+        return dictionary

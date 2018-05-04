@@ -84,6 +84,56 @@ class Article(object):
                                     }
         return bigram_hash
 
+    def invert_bigram(self):
+        if not self.paragraphs:
+            self.detect_paragraph()
+
+        bigram_hash = {}
+        for paragraph in self.paragraphs:
+            for sentence in paragraph:
+                words_array = sentence.split(' ')
+                for index, word in enumerate(words_array):
+                    word_type = self.check_type_syllable(word)
+                    if word_type == 'VIETNAMESE_SYLLABLE|SYSTEM_CODE':
+                        if index == 0:
+                            if word in bigram_hash:
+                                bigram_hash[word]['number_occurrences'] += 1
+                            else:
+                                bigram_hash[word] = {
+                                    'number_occurrences': 1
+                                }
+                        else:
+                            previous_word = words_array[index - 1]
+                            previous_word_type = self.check_type_syllable(previous_word)
+                            if previous_word_type == 'VIETNAMESE_SYLLABLE|SYSTEM_CODE':
+                                bigram = previous_word + ' ' + word
+
+                                if word in bigram_hash:
+                                    if bigram in bigram_hash[word]:
+                                        bigram_hash[word][bigram]['number_occurrences'] += 1
+                                    else:
+                                        bigram_hash[word][bigram] = {
+                                            'array_article': [self.index_article],
+                                            'number_occurrences': 1
+                                        }
+                                    bigram_hash[word]['number_occurrences'] += 1
+                                else:
+                                    bigram_hash[word] = {
+                                        bigram: {
+                                            'array_article': [self.index_article],
+                                            'number_occurrences': 1
+                                        },
+                                        'number_occurrences': 1
+                                }
+                            else:
+                                if word in bigram_hash:
+                                    bigram_hash[word]['number_occurrences'] += 1
+                                else:
+                                    bigram_hash[word] = {
+                                        'number_occurrences': 1
+                                    }
+        return bigram_hash
+
     def check_type_syllable(self, syllable):
         if syllable in self.syllables_dictionary:
             return 'VIETNAMESE_SYLLABLE|SYSTEM_CODE'
@@ -92,6 +142,57 @@ class Article(object):
         if syllable.isdigit():
             return 'DIGIT|SYSTEM_CODE'
         return 'CODE|SYSTEM_CODE'
+
+    def get_hmm_training(self):
+        """
+        Usage: This function will prepare training data for HMM
+        """
+        if not self.paragraphs:
+            self.detect_paragraph()
+
+        training_data = []
+        for paragraph in self.paragraphs:
+            for sentence in paragraph:
+                sentence = sentence[0].lower() + sentence[1:]
+                sentence_training_data = []
+                syllables = sentence.split()
+                for syllable in syllables:
+                    syllable_type = self.check_type_syllable(syllable)
+                    if syllable_type == 'VIETNAMESE_SYLLABLE|SYSTEM_CODE':
+                        sentence_training_data.append((syllable, ''))
+                    else:
+                        sentence_training_data.append((syllable_type, ''))
+                training_data.append(sentence_training_data)
+        return training_data
+
+    def convert_syllable_to_number(self):
+        """
+        Usage: This funtion will convert syllable in article to number
+        Require: The syllables_dictionary must be dict, not set
+        """
+        if not self.paragraphs:
+            self.detect_paragraph()
+
+        new_article = []
+        not_vietnamese_code = self.syllables_dictionary['NOT_VIETNAMESE']
+        for paragraph in self.paragraphs:
+            for sentence in paragraph:
+                sentence = sentence[0].lower() + sentence[1:]
+                sentence_training_data = []
+                syllables = sentence.split()
+                for syllable in syllables:
+                    if syllable in self.syllables_dictionary:
+                        syllable_number = self.syllables_dictionary[syllable]
+                        sentence_training_data.append(syllable_number)
+                    else:
+                        syllable_number = not_vietnamese_code
+                        if not sentence_training_data:
+                            sentence_training_data.append(syllable_number)
+                        elif sentence_training_data[-1] != not_vietnamese_code:
+                            sentence_training_data.append(syllable_number)
+                new_article.append(sentence_training_data)
+        return new_article
+
 
 if __name__ == '__main__':
     # syllables_dictionary = Helper.load_syllables_dictionary()

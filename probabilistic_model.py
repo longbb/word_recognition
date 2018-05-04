@@ -15,7 +15,8 @@ import multiprocessing
 rule_01_done = 24360
 
 class ProbabilisticModel(object):
-    def __init__(self, mbcon, mtcon, mbsup, mtsup, dcon):
+    def __init__(self, mbcon, mtcon, mbsup, mtsup, dcon, bigram_hash, occurrences_statistic,
+        word_array, lmc_more_2):
         self.sentence_database = Database('sentence_collection')
         self.bigram_database = Database('bigram_collection')
         self.word_database = Database('word_collection')
@@ -24,6 +25,10 @@ class ProbabilisticModel(object):
         self.mbsup = mbsup
         self.mtsup = mtsup
         self.dcon = dcon
+        self.bigram_hash = bigram_hash
+        self.occurrences_statistic = occurrences_statistic
+        self.word_array = word_array
+        self.lmc_more_2 = lmc_more_2
 
     def confident_model(self, first_syllable, second_syllable):
         bigram = first_syllable + ' ' + second_syllable
@@ -43,6 +48,10 @@ class ProbabilisticModel(object):
     def recognition_function(self, first_syllable, second_syllable):
         confident = self.confident_model(first_syllable, second_syllable)
         bigram = first_syllable + ' ' + second_syllable
+        if self.check_name(first_syllable) and self.check_name(second_syllable):
+            return 1
+        if self.check_name(first_syllable) or self.check_name(second_syllable):
+            return 0
         occurrences = self.__bigram_occurrences(bigram)
         if confident >= self.mtcon and occurrences >= self.mtsup:
             return 1
@@ -51,6 +60,7 @@ class ProbabilisticModel(object):
         return 0
 
     def detect_lmc(self, sentence):
+        sentence = sentence[0].lower() + sentence[1:]
         word_array = sentence.split(' ')
         lmc_array = []
         for index, word in enumerate(word_array):
@@ -75,63 +85,85 @@ class ProbabilisticModel(object):
         for index in range(index_article, number_article):
             self.article_learning_01(index)
 
-
-    def article_learning_01(self, index_article):
-        print 'Start learning for article % i' % index_article
-        find_article_data = self.sentence_database.find_one({
-            'article_index': index_article
-        })
-        if not (find_article_data['success'] and find_article_data['object']):
-            print 'Has an exception at %i' % index_article
-            return
-
-        article_data = find_article_data['object']
-        new_sentence_array = []
-        for sentence in article_data['data']:
-            self.rule_0_and_1(sentence)
-        print 'Learning article %i done' % index_article
+    def article_learning_01(self, index_article, article_content):
+        print 'Start learning for article %s' % index_article
+        article = Article(article_content, index_article, None)
+        article.detect_paragraph()
+        for paragraph in article.paragraphs:
+            for sentence in paragraph:
+                sentence = sentence.decode('utf-8').lower().encode('utf-8')
+                self.rule_0_and_1(sentence)
+        print 'Learning article %s done' % index_article
 
     def rule_0_and_1(self, sentence):
-        try:
-            lmc_array = self.detect_lmc(sentence)
-
-            for lmc_index, lmc in enumerate(lmc_array):
-                link_lmc = self.__link_lmc(lmc)
-                find_lmc = self.bigram_database.find_one({
-                    'key_word': link_lmc
-                })
-                if not find_lmc['success']:
-                    print 'Has an exception at %i' % index
-                    return
-                if find_lmc['object']:
-                    lmc_array[lmc_index] = link_lmc
-                elif len(lmc) == 2:
-                    lmc_array[lmc_index] = link_lmc
-                    # insert new word
-                    create_new_word = self.word_database.create({
-                        'key_word': link_lmc
-                    })
-                    create_new_bigram = self.bigram_database.create({
-                        'key_word': link_lmc
-                    })
-        except Exception as error:
-            print 'Has an error %s' % str(error)
-
-    def word_recognition(self, sentence):
+        # try:
         lmc_array = self.detect_lmc(sentence)
 
         for lmc_index, lmc in enumerate(lmc_array):
             link_lmc = self.__link_lmc(lmc)
-            find_lmc = self.bigram_database.find_one({
-                'key_word': link_lmc
-            })
-            if not find_lmc['success']:
-                print 'Has an exception at %i' % index
-                return
-            if find_lmc['object']:
+            if link_lmc in self.word_array:
                 lmc_array[lmc_index] = link_lmc
-            elif len(lmc) < 2:
+            elif len(lmc) == 2:
                 lmc_array[lmc_index] = link_lmc
+                # insert new word
+                self.word_array.add(link_lmc)
+            elif (len(lmc) == 1) and (link_lmc in self.bigram_hash):
+                lmc_array[lmc_index] = link_lmc
+                # insert new word
+                self.word_array.add(link_lmc)
+            elif len(lmc) > 2:
+                if link_lmc in self.lmc_more_2:
+                    self.lmc_more_2[link_lmc] += 1
+                else:
+                    self.lmc_more_2[link_lmc] = 1
+        # except Exception as error:
+        #     print 'Has an error %s' % str(error)
+
+    def rule_2_and_3(self):
+        print '%i lmc need handle' % len(self.lmc_more_2)
+        number_done = 0
+        for lmc, number_occurrences in self.lmc_more_2.iteritems():
+            lmc_array = lmc.split('_')
+            confident_array = []
+            for word_index, word in enumerate(lmc_array):
+                if word_index > 0:
+                    confident_array.append(
+                        self.confident_model(lmc_array[word_index - 1], word)
+                    )
+            max_confident_index = 0
+            max_confident_value = 0
+            second_confident_value = 0
+            max_confident_position = 0
+            for confident_index, confident in enumerate(confident_array):
+                if confident > max_confident_value:
+                    max_confident_position = confident_index
+                    max_confident_index = confident_index
+                    second_confident_value = max_confident_value
+                    max_confident_value = confident
+            different_confident = max_confident_value - second_confident_value
+            if different_confident > self.dcon:
+                new_word = self.__link_lmc([lmc[max_confident_index], lmc[max_confident_index + 1]])
+                if new_word not in self.word_array:
+                    self.word_array.add(new_word)
+            else:
+                if (number_occurrences > self.mtsup) and (lmc not in self.word_array) \
+                    and (len(lmc_array) == 3):
+                    self.word_array.add(lmc)
+            number_done += 1
+            print 'Lmc %i done' % number_done
+
+    def word_recognition(self, sentence):
+        lmc_array = self.detect_lmc(sentence)
+        new_lmc_array = []
+
+        for lmc_index, lmc in enumerate(lmc_array):
+            link_lmc = self.__link_lmc(lmc)
+            if link_lmc in self.word_array:
+                new_lmc_array.append(link_lmc)
+            elif len(lmc) <= 2:
+                new_lmc_array.append(link_lmc)
+            elif self.check_name(lmc[0]):
+                new_lmc_array.append(link_lmc)
             else:
                 confident_array = []
                 for word_index, word in enumerate(lmc):
@@ -139,12 +171,13 @@ class ProbabilisticModel(object):
                         confident_array.append(
                             self.confident_model(lmc[word_index - 1], word)
                         )
-
                 max_confident_index = 0
                 max_confident_value = 0
                 second_confident_value = 0
+                max_confident_position = 0
                 for confident_index, confident in enumerate(confident_array):
                     if confident > max_confident_value:
+                        max_confident_position = confident_index
                         max_confident_index = confident_index
                         second_confident_value = max_confident_value
                         max_confident_value = confident
@@ -164,47 +197,23 @@ class ProbabilisticModel(object):
                             else:
                                 new_lmc.append(lmc[word_index])
                         word_index += 1
-                    lmc_array[lmc_index] = ' '.join(new_lmc)
+                    new_lmc_array.append(' '.join(new_lmc))
                 else:
-                    lmc_string = ' '.join(lmc)
-                    first_bigram = lmc[0] + ' ' + lmc[1]
-                    find_unigram = self.bigram_database.find_one({
-                        'key_word': lmc[0]
-                    })
-                    if find_unigram['object']:
-                        bigram_data = find_unigram['object']['data']
-                        if first_bigram in bigram_data:
-                            array_article = bigram_data[first_bigram]['array_article']
-                            number_occurrences = self.__find_number_occurrences(
-                                lmc_string, array_article)
-                            if number_occurrences > self.mtsup:
-                                lmc_array[lmc_index] = link_lmc
-                            else:
-                                lmc_array[lmc_index] = lmc_string
-                        else:
-                            lmc_array[lmc_index] = lmc_string
-                    else:
-                        lmc_array[lmc_index] = lmc_string
-        new_sentence = ' '.join(lmc_array)
+                    new_lmc_array.append(' '.join(lmc))
+
+        new_sentence = ' '.join(new_lmc_array)
         return new_sentence
 
 
     def unigram_probability(self, unigram):
-        find_total_number_occurrences = self.bigram_database.find_one({
-            'key_word': 'SYSTEM_CODE|NUMBER_UNIGRAM_OCCURRENCES'
-        })
-        if not (find_total_number_occurrences['success'] and \
-            find_total_number_occurrences['object']):
-            return 0
-        total_number_occurrences = find_total_number_occurrences['object']['data']
-
-        find_unigram = self.bigram_database.find_one({
-            'key_word': unigram
-        })
-        if not (find_unigram['success'] and find_unigram['object']):
-            return 0
-        unigram_occurrences = find_unigram['object']['data']['number_occurrences']
-
+        total_number_occurrences = self.occurrences_statistic['number_unigram_occurrences']
+        if unigram not in self.bigram_hash:
+            return {
+                'probability': 0,
+                'number_occurrences': 0,
+                'total_number_occurrences': total_number_occurrences
+            }
+        unigram_occurrences = self.bigram_hash[unigram]['number_occurrences']
         probability = float(unigram_occurrences) / total_number_occurrences
         return {
             'probability': probability,
@@ -213,13 +222,7 @@ class ProbabilisticModel(object):
         }
 
     def bigram_probability(self, bigram):
-        find_total_number_occurrences = self.bigram_database.find_one({
-            'key_word': 'SYSTEM_CODE|NUMBER_BIGRAM_OCCURRENCES'
-        })
-        if not (find_total_number_occurrences['success'] and \
-            find_total_number_occurrences['object']):
-            return 0
-        total_number_occurrences = find_total_number_occurrences['object']['data']
+        total_number_occurrences = self.occurrences_statistic['number_bigram_occurrences']
         bigram_occurrences = self.__bigram_occurrences(bigram)
         probability = float(bigram_occurrences) / total_number_occurrences
         return {
@@ -231,17 +234,12 @@ class ProbabilisticModel(object):
     def __bigram_occurrences(self, bigram):
         syllable_array = bigram.split(' ')
         first_syllable = syllable_array[0]
-
-        find_unigram = find_unigram = self.bigram_database.find_one({
-            'key_word': first_syllable
-        })
-        if not (find_unigram['success'] and find_unigram['object']):
+        if not first_syllable in self.bigram_hash:
             return 0
-        bigram_data = find_unigram['object']['data']
-        if bigram not in bigram_data:
+        first_syllable_info = self.bigram_hash[first_syllable]
+        if bigram not in first_syllable_info:
             return 0
-        bigram_occurrences = bigram_data[bigram]['number_occurrences']
-        return bigram_occurrences
+        return first_syllable_info[bigram]['number_occurrences']
 
     def __link_lmc(self, lmc):
         for word in lmc:
@@ -299,18 +297,39 @@ class ProbabilisticModel(object):
             'array_precesion': array_precesion
         }
 
+    def check_name(self, syllable):
+        if not syllable:
+            return False
+        if syllable[0].isupper():
+            return True
+        return False
+
 if __name__ == '__main__':
-    mbcon = 0.03
-    mtcon = 0.03
+    mbcon = 0.0005
+    mtcon = 0.0005
     mbsup = 100
     mtsup = 100
-    probabilistic_model = ProbabilisticModel(mbcon, mtcon, mbsup, mtsup, 1)
+    module_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__))) + \
+        '/word_recognition'
+    bigram_path = module_path + '/result_data/bigram.pkl'
+    bigram_hash = Helper.load_obj(bigram_path)
+    occurrences_data_path = module_path + '/result_data/occurrences.pkl'
+    statistic_bigram = Helper.load_obj(occurrences_data_path)
+    word_array = set()
+    lmc_more_2 = {}
+
+    probabilistic_model = ProbabilisticModel(mbcon, mtcon, mbsup, mtsup, 1,
+        bigram_hash, statistic_bigram, word_array, lmc_more_2)
+    sentence = Helper.clear_str('Ấm lên toàn cầu, nóng lên toàn cầu, hay hâm nóng toàn cầu là hiện tượng nhiệt độ trung bình của không khí và các đại dương trên Trái Đất tăng lên theo các quan sát trong các thập kỷ gần đây').decode('utf-8')
+    lmc_array = probabilistic_model.word_recognition(sentence)
+    print lmc_array
+    import pdb; pdb.set_trace()
     # print probabilistic_model.learning_process()
     # new_sentence = probabilistic_model.word_recognition(u'Để làm được điều này các nhà nghiên cứu đã cố gắng giảm phần khung bao quanh màn hình làm cho mỏng hơn nhưng vẫn tích hợp nhiều linh kiện hơn kéo theo thời gian nghiên cứu lâu hơn')
     # print new_sentence
     # precision = probabilistic_model.caculate_precesion(source_sentence, destination_sentence)
     # print precision
-    module_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__))) + \
-        '/word_recognition'
-    path_to_csv_file = module_path + '/data/evaluate.csv'
-    probabilistic_model.evaluate(path_to_csv_file)
+    # module_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__))) + \
+    #     '/word_recognition'
+    # path_to_csv_file = module_path + '/data/evaluate.csv'
+    # probabilistic_model.evaluate(path_to_csv_file)

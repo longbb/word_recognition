@@ -3,5 +3,11 @@ data/*
 viwiki_data/*
 # Ignore result file
 result_data/*
+# Igonre VLSP_Sentence
+VLSP_Sentences/*
+# Igonre HMM_data
+hmm/hmm_data/*
+# Igonre viwiki data
+viwiki_data/*
 #Ignore pyc file
 *.pyc
