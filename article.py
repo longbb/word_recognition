@@ -28,7 +28,6 @@ class Article(object):
                 for sentence in senetence_in_pharagraph:
                     if sentence:
                         new_sentence = Helper.clear_str(sentence)
-                        # new_sentence = new_sentence.replace('\xc2\xa0\xc2\xa0', '')
                         if new_sentence:
                             sentences.append(new_sentence)
                 array_pharagraph_with_sentence.append(sentences)

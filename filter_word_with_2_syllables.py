@@ -41,4 +41,3 @@ if __name__ == '__main__':
     print 'There are %i words have three syllables' % len(three_syllables_word)
     print 'There are %i words have four syllables' % len(four_syllables_word)
     print 'There are %i other words' % len(other)
-    # import pdb; pdb.set_trace()

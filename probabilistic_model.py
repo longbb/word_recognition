@@ -268,7 +268,12 @@ class ProbabilisticModel(object):
         for predict_word in predict_words:
             if predict_word in destination_words:
                 number_correct_words += 1
-        return float(number_correct_words) / len(predict_words)
+        return {
+            'precision': float(number_correct_words) / len(predict_words),
+            'number_predict': len(predict_words),
+            'number_predict_true': number_correct_words,
+            'number_destination_word': len(destination_words)
+        }
 
     def evaluate(self, path_to_evaluate_data):
         evaluate_data = Helper.read_file_csv(path_to_evaluate_data)
@@ -278,7 +283,7 @@ class ProbabilisticModel(object):
         array_precesion = []
         for index, data in enumerate(evaluate_data):
             print 'Predict for sentence %i' % index
-            precision = self.caculate_precesion(data[0].decode('utf-8'), data[1].decode('utf-8'))
+            precision = self.caculate_precesion(data[0].decode('utf-8'), data[1].decode('utf-8'))['precision']
             if precision > max_precesion:
                 max_precesion = precision
             if precision < min_precesion:
@@ -323,13 +328,3 @@ if __name__ == '__main__':
     sentence = Helper.clear_str('Ấm lên toàn cầu, nóng lên toàn cầu, hay hâm nóng toàn cầu là hiện tượng nhiệt độ trung bình của không khí và các đại dương trên Trái Đất tăng lên theo các quan sát trong các thập kỷ gần đây').decode('utf-8')
     lmc_array = probabilistic_model.word_recognition(sentence)
     print lmc_array
-    import pdb; pdb.set_trace()
-    # print probabilistic_model.learning_process()
-    # new_sentence = probabilistic_model.word_recognition(u'Để làm được điều này các nhà nghiên cứu đã cố gắng giảm phần khung bao quanh màn hình làm cho mỏng hơn nhưng vẫn tích hợp nhiều linh kiện hơn kéo theo thời gian nghiên cứu lâu hơn')
-    # print new_sentence
-    # precision = probabilistic_model.caculate_precesion(source_sentence, destination_sentence)
-    # print precision
-    # module_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__))) + \
-    #     '/word_recognition'
-    # path_to_csv_file = module_path + '/data/evaluate.csv'
-    # probabilistic_model.evaluate(path_to_csv_file)

@@ -56,24 +56,31 @@ class HiddenMarkovModel(object):
 
     def caculate_precesion(self, unlabeled_sequence, labeled_sequence):
         try:
-            if len(unlabeled_sequence) != len(labeled_sequence):
-                return {
-                    'success': False,
-                    'message': 'unlabeled_sequence and labeled_sequence do not match'
-                }
             predict_tags = self.predict(unlabeled_sequence)
             predict_tags = list(map(lambda predict_tag: predict_tag[1], predict_tags))
 
-            number_predict_true = 0
+            word_array = []
+            new_word = []
             for index, predict_tag in enumerate(predict_tags):
-                if index >= len(labeled_sequence):
-                    continue
-                if labeled_sequence[index] == predict_tag:
+                if predict_tag == 0:
+                    if new_word:
+                        word_array.append('_'.join(new_word))
+                    new_word = [unlabeled_sequence[index]]
+                else:
+                    new_word.append(unlabeled_sequence[index])
+            word_array.append('_'.join(new_word))
+
+            number_predict_true = 0
+            for word in word_array:
+                if word in labeled_sequence:
                     number_predict_true += 1
 
             return {
                 'success': True,
-                'object': float(number_predict_true) / len(predict_tags)
+                'object': float(number_predict_true) / len(predict_tags),
+                'number_predict_true': number_predict_true,
+                'number_predict': len(word_array),
+                'number_destination_word': len(labeled_sequence)
             }
         except Exception as error:
             return {

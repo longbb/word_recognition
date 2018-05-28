@@ -1,0 +1,30 @@
+.btn-submit {
+  margin: 20px auto 10px;
+}
+
+html {
+  background: url('/static/img/bg.jpg') top center fixed no-repeat;
+  height: 100%;
+  width: 100%;
+}
+
+body {
+  padding-top: 5%;
+  background-color: rgba(245, 7, 7, 0.24);
+  color: black;
+  width: 100%;
+  min-width: 100%;
+  min-height: 100%;
+}
+
+.title {
+  padding-bottom: 5%;
+}
+
+textarea {
+  resize: none;
+}
+
+.row::after {
+  clear: none !important;
+}

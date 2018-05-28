@@ -20,7 +20,7 @@ if __name__ == '__main__':
 
     module_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__))) + \
         '/word_recognition'
-
+    syllables_dictionary = Helper.load_syllables_dictionary()
     bigram_path = module_path + '/result_data/bigram.pkl'
     bigram_hash = Helper.load_obj(bigram_path)
     occurrences_data_path = module_path + '/result_data/occurrences.pkl'
@@ -28,33 +28,39 @@ if __name__ == '__main__':
     invert_bigram_path = module_path + '/result_data/invert_bigram.pkl'
     invert_bigram_hash = Helper.load_obj(invert_bigram_path)
 
-    vlsp_folder_path = module_path + '/VLSP_Sentences'
-    files = os.listdir(vlsp_folder_path)[:100]
-    sentences = []
+    vlsp_folder_path = module_path + '/VLSP_Sentences/test'
+    files = os.listdir(vlsp_folder_path)
+    test_sentences = []
     for file in files:
-        sentences.extend(Helper.read_vlsp_sentences(vlsp_folder_path + '/' + file))
+        test_sentences.extend(Helper.read_vlsp_sentences(vlsp_folder_path + '/' + file))
+
 
     avg_precesion_array = []
     max_precesion = 0
     best_params = {}
-    # for mbcon in np.arange(0.0001, 0.0041, 0.0001):
-    #     for dcon in np.arange(0.0001, 0.0101, 0.0001):
     mbcon = 0.0005
     dcon = 0.0095
     word_array = set()
     lmc_more_2 = {}
-    # probabilistic_model = ProbabilisticModel(mbcon, mbcon, 100, 100, dcon,
-    #     bigram_hash, statistic_bigram, word_array, lmc_more_2)
     probabilistic_model = Model_3(mbcon, mbcon, 100, 100, dcon,
         bigram_hash, statistic_bigram, word_array, lmc_more_2, invert_bigram_hash)
 
     total_precesion = 0
-    for sentence in sentences:
+    number_word_destination = 0
+    number_predict_true = 0
+    number_predict = 0
+    for sentence in test_sentences:
+        if not sentence:
+            continue
         not_split_sentences = sentence.replace("_", " ")
-        precision = probabilistic_model.caculate_precesion(
+        calculate_precision = probabilistic_model.caculate_precesion(
             not_split_sentences, sentence)
+        number_word_destination += calculate_precision['number_destination_word']
+        number_predict_true += calculate_precision['number_predict_true']
+        number_predict += calculate_precision['number_predict']
+        precision = calculate_precision['precision']
         total_precesion += precision
-    avg_precesion = total_precesion / len(sentences)
+    avg_precesion = total_precesion / len(test_sentences)
     print 'Precesion with mbcon is %f and dcon is %f: %f' % (mbcon, dcon, avg_precesion)
     avg_precesion_array.append({
         'avg_precesion': avg_precesion,
@@ -69,6 +75,8 @@ if __name__ == '__main__':
             }
     print 'Best params: mbcon is %f and dcon is %f and precesion is %f' % (
         best_params['mbcon'], best_params['dcon'], max_precesion)
+    print 'Precision: %f' % (float(number_predict_true) / number_predict)
+    print 'Recall: %f' % (float(number_predict_true) / number_word_destination)
 
 
 

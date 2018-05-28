@@ -68,4 +68,3 @@ if __name__ == '__main__':
     lmc_array = probabilistic_model.detect_lmc(sentence)
 
     confident_model = probabilistic_model.confident_model('đại', 'dương')
-    import pdb; pdb.set_trace()

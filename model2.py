@@ -42,7 +42,6 @@ class Model_2(ProbabilisticModel):
 
         confident = bigram_probability * bigram_probability
         confident = confident / (first_syllable_probability * second_syllable_probability)
-        # import pdb; pdb.set_trace()
         return confident
 
     def caculate_phi(self, number_occurrences):
@@ -66,11 +65,3 @@ if __name__ == '__main__':
     lmc_array = probabilistic_model.detect_lmc(sentence)
 
     confident_model = probabilistic_model.confident_model('đại', 'dương')
-    import pdb; pdb.set_trace()
-    # print probabilistic_model.learning_process()
-    # new_sentence = probabilistic_model.word_recognition(u'Việc xét duyệt học bổng cho các năm học sau sẽ dựa vào kết quả học tập và thành tích đóng góp nhiều phong trào tại trường')
-    # print new_sentence
-    # module_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__))) + \
-    #     '/word_recognition'
-    # path_to_csv_file = module_path + '/data/evaluate.csv'
-    # probabilistic_model.evaluate(path_to_csv_file)

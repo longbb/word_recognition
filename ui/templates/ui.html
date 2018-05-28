@@ -1,0 +1,30 @@
+<!doctype html>
+<html>
+  <head>
+    <script type=text/javascript src="{{ url_for('static', filename='javascript/jquery.min.js') }}"></script>
+    <script type=text/javascript src="{{ url_for('static', filename='javascript/ui.js') }}"></script>
+    <link rel= "stylesheet" type= "text/css" href= "{{ url_for('static',filename='css/bootstrap.min.css') }}">
+    <link rel= "stylesheet" type= "text/css" href= "{{ url_for('static',filename='css/custom.css') }}">
+    <title>UWS with HMM</title>
+  </head>
+   <body>
+    <center>
+      <h2 class="text-center title">Unsupervised Word Segmentation with Hidden Markov Model</h2>
+      <div class="row">
+        <div class="col-md-8 col-md-offset-2 col-xs-8 col-xs-offset-2 col-sm-8 col-sm-offset-2">
+          <form method = "POST" id="test" action="javascript:;" class="form-group">
+            <label class="pull-left">Input</label>
+            <textarea id="inputArticle" placeholder="Insert your article" class="form-control" rows="5"></textarea>
+            <button class="btn-submit btn btn-success" id="submitButton">
+                Analyze
+            </button>
+          </form>
+          <form class="form-group">
+            <label class="pull-left">Output</label>
+            <textarea id="outputArticle" readonly="true" class="form-control" rows="5"></textarea>
+          </form>
+        </div>
+      </div>
+    </center>
+  </body>
+</html>

@@ -10,11 +10,12 @@ class Helper(object):
         pass
 
     @staticmethod
-    def clear_str(string):
+    def clear_str(string, replace_string=' PUNC|SYSTEM_CODE '):
         char_special = '\,|\;|\(|\)|\>|\<|\'|\"'
-        str_clean = re.sub('[' + char_special + ']', ' PUNC|SYSTEM_CODE ', string)
+        str_clean = re.sub('([' + char_special + '])', r' \1 ', string)
         str_clean = re.sub('[.]', ' ', str_clean)
         str_clean = str_clean.strip()
+        str_clean = ' '.join(str_clean.split())
         return str_clean
 
     @staticmethod
@@ -52,7 +53,7 @@ class Helper(object):
     def load_syllables_dictionary(output_option='set'):
         module_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__))) + \
             '/word_recognition'
-        path_to_dict = module_path + '/data/syllables_dictionary.txt'
+        path_to_dict = module_path + '/data/syllables_dictionary_1.txt'
         dict_file = open(path_to_dict, 'r')
         syllables_dictionary = []
         for line in dict_file:
@@ -78,15 +79,6 @@ class Helper(object):
                 doc_array.append(new_doc)
             else:
                 new_doc += line
-        # xml_file = '<root>\n'+ xml_file + '</root>'
-        # parser = etree.XMLParser(recover=True)
-        # # import pdb; pdb.set_trace()
-        # root = ET.fromstring(xml_file, parser=parser)
-
-        # doc_array = []
-        # for doc in root.findall('doc'):
-        #     doc_content = doc.text
-        #     doc_array.append(doc_content)
         return doc_array
 
     @staticmethod
@@ -103,14 +95,14 @@ class Helper(object):
     def read_vlsp_sentences(path_to_file):
         xml_file = open(path_to_file, 'r')
         doc_array = []
-        new_doc = ''
+        new_doc = []
         for line in xml_file:
-            if line[:6] == '<pBody':
-                new_doc = ''
-            elif line[:7] == '</pBody':
-                doc_array.append(new_doc)
+            if ('pBody' in line) and ('/' not in line):
+                new_doc = []
+            elif ('pBody' in line) and ('/' in line):
+                doc_array.extend(new_doc)
             else:
-                new_doc += line
+                new_doc.append(line)
         return doc_array
 
 
@@ -122,7 +114,6 @@ class Helper(object):
             if '##' in line:
                 index = line.rfind('#')
                 word = line[index+1:-1]
-                # import pdb; pdb.set_trace()
                 word = word.replace(" ", "_")
                 dictionary.add(word)
         return dictionary
@@ -133,6 +124,15 @@ class Helper(object):
         dict_file = open(path_to_dict, 'r')
         for line in dict_file:
             word = line.split('\t')[0]
-            # import pdb; pdb.set_trace()
             dictionary.add(word)
         return dictionary
+
+    @staticmethod
+    def check_proper_noun(syllable):
+        if not syllable:
+            return False
+        if 'SYSTEM_CODE' in syllable:
+            return False
+        if syllable.decode('utf-8')[0].isupper():
+            return True
+        return False

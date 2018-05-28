@@ -14,7 +14,6 @@ if __name__ == '__main__':
 
     labels = ['C', 'L', 'E', 'P', 'Nc', 'R']
 
-
     for label in labels:
         for c_label in root.findall('.//' + label):
             c_text = c_label.text.lower()
@@ -29,11 +28,4 @@ if __name__ == '__main__':
 
     result_data_path = module_path + '/data/c_e_l_viettreebank.pkl'
     Helper.save_obj(c_l_e_labels, result_data_path)
-    print 'Save done!'
-
-    result_data_path = module_path + '/data/c_e_l_viettreebank.txt'
-    c_l_e_file = open(result_data_path, 'w')
-    for word in c_l_e_labels:
-        c_l_e_file.write(word.encode('utf8') + '\n')
-    c_l_e_file.close()
     print 'Save done!'

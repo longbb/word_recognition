@@ -7,6 +7,8 @@ from helper import Helper
 import csv
 import threading
 import time
+import math
+import matplotlib.pyplot as plt
 
 class HiddenMarkovModel(object):
     def __init__(self, states, observations, transitions, emissions,
@@ -89,9 +91,15 @@ class HiddenMarkovModel(object):
             'backward_matrix': backward_matrix[::-1]
         }
 
-    def veterbi_algorithm(self, observations_sequence):
+    def veterbi_algorithm(self, observations_sequence, using_sub_params=False,
+        bigram_hash=None, invert_bigram_hash=None, number_occurrences=None,
+        invert_dictionary=None):
         veterbi_matrix = []
         backtrace_matrix = []
+        if using_sub_params:
+            if not (bigram_hash and invert_bigram_hash):
+                print 'Bigram hash and invert bigram hash is required when using sub params!'
+                return []
 
         for index_observation, observation in enumerate(observations_sequence):
             veterbi_array = []
@@ -119,6 +127,18 @@ class HiddenMarkovModel(object):
                         elif alpha_i < new_alpha_i:
                             alpha_i = new_alpha_i
                             beta_i = index_previous_state
+
+                    if using_sub_params and state == 1:
+                        # sub_parameter = self.__calculate_sub_parameter(
+                        #     bigram_hash, invert_bigram_hash, observation,
+                        #     observations_sequence[index_observation - 1],
+                        #     invert_dictionary)
+
+                        sub_parameter = self.__calculate_pmi(
+                            bigram_hash, invert_bigram_hash, observation,
+                            observations_sequence[index_observation - 1],
+                            number_occurrences, invert_dictionary)
+                        alpha_i = alpha_i * sub_parameter
 
                     veterbi_array.append(alpha_i)
                     backtrace_array.append(beta_i)
@@ -149,6 +169,8 @@ class HiddenMarkovModel(object):
         check_convergence = False
         iteration_number = 1
         sub_list_observations_sequence = []
+        self.emission_changes = []
+        self.transition_changes = []
         for index_observation_sequence, observations_sequence in \
             enumerate(list_observations_sequence):
             if index_observation_sequence < number_thread:
@@ -283,12 +305,14 @@ class HiddenMarkovModel(object):
             for index_observation, observation_emission in enumerate(state_emission):
                 emission_change += abs(observation_emission - \
                     self.emissions[index_state][index_observation])
+        self.emission_changes.append(emission_change)
 
         transition_change = 0
         for index_state, state_transaction in enumerate(new_transition_matrix):
             for index_next_state, next_step_transacion in enumerate(state_transaction):
                 transition_change += abs(next_step_transacion - \
                     self.transitions[index_state][index_next_state])
+        self.transition_changes.append(transition_change)
 
         print 'Emission change: %f' % emission_change
         print 'transition_change: %f' % transition_change
@@ -296,20 +320,131 @@ class HiddenMarkovModel(object):
         check = (emission_change < 0.1) and (transition_change < 0.1)
         return check
 
-if __name__ == '__main__':
-    # states = [0, 1]
-    # observations = [0, 1, 2]
-    # transitions = [[0.6, 0.4], [0.5, 0.5]]
-    # emissions = [[0.2, 0.4, 0.4], [0.5, 0.4, 0.1]]
+    def __calculate_sub_parameter(self, bigram_hash, invert_bigram_hash,
+        syllable_index, previous_syllable_index, invert_dictionary):
+        syllable = invert_dictionary[syllable_index]
+        previous_syllable = invert_dictionary[previous_syllable_index]
 
-    # start_probabilities = [0.8, 0.2]
-    # hmm = HiddenMarkovModel(states, observations, transitions, emissions, \
-    #     start_probabilities)
-    # # forward_probability = hmm.forward_algorithm([2, 0, 2])
-    # # backward_probability = hmm.backward_algorithm([2, 0, 2])
-    # # hmm.baum_welch_algorithm([[2, 0, 1, 2, 1, 2, 0, 0, 0, 0, 1, 0, 1, 0, 2], [1, 0, 1, 2, 1, 1, 2, 1, 2, 0, 0], [2, 2, 0, 1, 0, 2]], 3)
-    # sequence_states = hmm.veterbi_algorithm([2, 0, 2])
-    # import pdb; pdb.set_trace()
+        if previous_syllable not in bigram_hash:
+            return 1
+        if syllable not in invert_bigram_hash:
+            return 1
+
+        bigram = previous_syllable + ' ' + syllable
+        previous_syllable_hash = bigram_hash[previous_syllable]
+        syllable_hash = invert_bigram_hash[syllable]
+
+        forward_avg_number_occurrences = previous_syllable_hash['avg_number_occurrences']
+        if bigram in previous_syllable_hash:
+            forward_number_occurrences = previous_syllable_hash[bigram]['number_occurrences']
+        else:
+            forward_number_occurrences = 0
+        forward_rate = float(forward_number_occurrences) / forward_avg_number_occurrences
+
+        backward_avg_number_occurrences = syllable_hash['avg_number_occurrences']
+        if bigram in syllable_hash:
+            backward_number_occurrences = syllable_hash[bigram]['number_occurrences']
+        else:
+            backward_number_occurrences = 0
+        backward_rate = float(backward_number_occurrences) / backward_avg_number_occurrences
+
+        sub_parameter = backward_rate * forward_rate
+        if sub_parameter == 0:
+            return sub_parameter
+        elif sub_parameter < 1:
+            return sub_parameter
+        else:
+            return math.log10(sub_parameter)
+
+    def __calculate_pmi(self, bigram_hash, invert_bigram_hash, syllable_index,
+        previous_syllable_index, number_occurrences, invert_dictionary):
+        syllable = invert_dictionary[syllable_index]
+        previous_syllable = invert_dictionary[previous_syllable_index]
+        if previous_syllable not in bigram_hash:
+            return 1
+        if syllable not in invert_bigram_hash:
+            return 1
+        bigram = previous_syllable + ' ' + syllable
+        previous_syllable_hash = bigram_hash[previous_syllable]
+        syllable_hash = invert_bigram_hash[syllable]
+
+        if bigram in previous_syllable_hash:
+            forward_number_occurrences = previous_syllable_hash[bigram]['number_occurrences']
+        else:
+            return 1
+
+        previous_syllable_occurrences = previous_syllable_hash['number_occurrences']
+        syllable_occurrences = syllable_hash['number_occurrences']
+
+        total_unigram_occurrences = number_occurrences['number_unigram_occurrences']
+        return math.log(float(forward_number_occurrences) * total_unigram_occurrences /\
+            (previous_syllable_occurrences * syllable_occurrences))
+
+    def word_segment(self, article, using_sub_params=False, bigram_hash=None,
+        invert_bigram_hash=None, number_occurrences=None, dictionary=None,
+        invert_dictionary=None):
+        article_module = Article(article, 0, dictionary)
+        article_module.detect_paragraph()
+        segmented_paragraphs = []
+        for paragraph in article_module.paragraphs:
+            segmented_sentences = []
+            for sentence in paragraph:
+                sentence = sentence[0].lower() + sentence[1:]
+                sentence = sentence.encode('utf-8')
+                # sentence = Helper.clear_str(
+                #     string=sentence,
+                #     replace_string=r' \1'
+                # )
+                sentence_object = Article(sentence, 0, dictionary)
+                encoded_sentence = sentence_object.convert_syllable_to_number()
+                if not encoded_sentence:
+                    continue
+                encoded_sentence = encoded_sentence[0]
+                state_sequence = self.veterbi_algorithm(
+                    encoded_sentence,
+                    using_sub_params=using_sub_params,
+                    bigram_hash=bigram_hash,
+                    invert_bigram_hash=invert_bigram_hash,
+                    number_occurrences=number_occurrences,
+                    invert_dictionary=invert_dictionary
+                )
+
+                word_array = []
+                syllables = sentence.split()
+                index_state = 0
+                new_word = []
+
+                for syllable in syllables:
+                    if syllable in sentence_object.syllables_dictionary:
+                        if state_sequence[index_state] == 1:
+                            new_word.append(syllable)
+                        else:
+                            if new_word:
+                                word_array.append('_'.join(new_word))
+                            new_word = [syllable]
+                        index_state += 1
+                    else:
+                        if new_word:
+                            if Helper.check_proper_noun(new_word[-1]) and \
+                                Helper.check_proper_noun(syllable):
+                                new_word.append(syllable)
+                            else:
+                                word_array.append('_'.join(new_word))
+                                new_word = [syllable]
+                        else:
+                            new_word = [syllable]
+
+                        if state_sequence[index_state] == 2 and index_state < len(state_sequence) - 1:
+                            index_state += 1
+                word_array.append('_'.join(new_word))
+                new_sentence = ' '.join(word_array)
+
+                segmented_sentences.append(new_sentence)
+            segmented_paragraphs.append('. '.join(segmented_sentences))
+        return '\n'.join(segmented_paragraphs)
+
+if __name__ == '__main__':
+    draw_graph = sys.argv[1] == "draw_graph"
 
     module_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     array_data_file = {
@@ -329,7 +464,6 @@ if __name__ == '__main__':
     for line in dictionary_file:
         word = line[:-1].decode('utf8')
         c_l_e_labels.add(word)
-    # c_l_e_labels = Helper.load_obj(c_l_e_path)
 
     # start build dict for training
     symbol_appeared = {}
@@ -337,6 +471,7 @@ if __name__ == '__main__':
     number_article = 0
     number_sentence = 0
     print 'Start build dictionaty'
+    #using viwiki
     for folder, max_file in array_data_file.iteritems():
         print '=======================***%s***=======================' % folder
         for index_file in range(0, max_file):
@@ -361,7 +496,6 @@ if __name__ == '__main__':
                     for sentence in paragraph:
                         number_sentence += 1
                         sentence = sentence[0].lower() + sentence[1:]
-                        sentence_training_data = []
                         syllables = sentence.split()
                         for syllable in syllables:
                             if syllable not in syllables_dictionary:
@@ -373,16 +507,52 @@ if __name__ == '__main__':
                             symbol_appeared[syllable] = number_appeared
                             number_appeared += 1
 
+    # #using vlsp
+    # vlsp_folder_path = module_path + '/VLSP_Sentences/train'
+    # files = os.listdir(vlsp_folder_path)
+    # doc_array = []
+    # for file in files:
+    #     posts = Helper.read_vlsp_sentences(vlsp_folder_path + '/' + file)
+    #     doc = '\n'.join(posts)
+    #     doc = doc.replace("_", " ")
+    #     doc_array.append(doc)
+
+    for index, doc in enumerate(doc_array):
+        print 'Start training in doc %i' % (index)
+        article = Article(doc, index, syllables_dictionary)
+        article.detect_paragraph()
+        number_article += 1
+        for paragraph in article.paragraphs:
+            for sentence in paragraph:
+                number_sentence += 1
+                sentence = sentence[0].lower() + sentence[1:]
+                syllables = sentence.split()
+                for syllable in syllables:
+                    if syllable not in syllables_dictionary:
+                        continue
+                    if syllable.decode('utf-8') in c_l_e_labels:
+                        continue
+                    if syllable in symbol_appeared:
+                        continue
+                    symbol_appeared[syllable] = number_appeared
+                    number_appeared += 1
     symbol_appeared['NOT_VIETNAMESE'] = 0
 
-    hmm_by_me_dictionary_path = module_path + '/hmm/hmm_data/hmm_by_me_dictionary_without_cle_all.pkl'
+    invert_dictionary = {}
+    for word, index_word in symbol_appeared.iteritems():
+        invert_dictionary[index_word] = word
+
+    hmm_by_me_dictionary_path = module_path + '/hmm/hmm_data/hmm_by_me_dictionary_without_cle_all_new_dict.pkl'
     save_data = Helper.save_obj(symbol_appeared, hmm_by_me_dictionary_path)
+    invert_dictionary_path = module_path + '/hmm/hmm_data/invert_hmm_by_me_dictionary_without_cle_all_new_dict.pkl'
+    save_data = Helper.save_obj(invert_dictionary, invert_dictionary_path)
     print 'Number article: %i' % number_article
     print 'Number sentence: %i' % number_sentence
 
     print 'Start training'
     observations_sequence = []
     number_doc_passed = 0
+    #using viwiki
     for folder, max_file in array_data_file.iteritems():
         print '=======================***%s***=======================' % folder
         for index_file in range(0, max_file):
@@ -404,12 +574,20 @@ if __name__ == '__main__':
                 article_unlabeled_sequences = article.convert_syllable_to_number()
                 observations_sequence.extend(article_unlabeled_sequences)
                 number_doc_passed += 1
-    observations_sequence = list(filter(lambda observation_sequence: \
-        len(observation_sequence) > 2, observations_sequence))
+
+    # #using vlsp
+    # for index, doc in enumerate(doc_array):
+    #     print 'Start training in doc %i' % (index)
+    #     article = Article(doc, index, symbol_appeared)
+    #     article_unlabeled_sequences = article.convert_syllable_to_number()
+    #     observations_sequence.extend(article_unlabeled_sequences)
+    #     number_doc_passed += 1
+    # observations_sequence = list(filter(lambda observation_sequence: \
+    #     len(observation_sequence) > 2, observations_sequence))
 
     states = [0, 1, 2]
     observations = range(0, len(symbol_appeared))
-    transitions = [[0.45, 0.35, 0.2], [0.6, 0.2, 0.2], [1, 0, 0]]
+    transitions = [[0.45, 0.35, 0.2], [0.7, 0.1, 0.2], [1, 0, 0]]
     emissions = []
     for index_state, state in enumerate(states):
         states_emission = []
@@ -431,6 +609,14 @@ if __name__ == '__main__':
     hmm = HiddenMarkovModel(states, observations, transitions, emissions, \
         start_probabilities)
     hmm.baum_welch_algorithm(observations_sequence, 1)
-    hmm_save_path = module_path + '/hmm/hmm_data/unsupervised_hmm_by_me_without_cle_all.pkl'
+    hmm_save_path = module_path + '/hmm/hmm_data/unsupervised_hmm_by_me_without_cle_all_new_dict.pkl'
     Helper.save_obj(hmm, hmm_save_path)
-    import pdb; pdb.set_trace()
+
+    if draw_graph:
+        plt.gca().set_color_cycle(['green', 'blue'])
+        number_step = range(1, len(hmm.emission_changes))
+        plt.plot(number_step, hmm.emission_changes[1:])
+        plt.plot(number_step, hmm.transition_changes[1:])
+        plt.legend(['emission_changes', 'transition_changes'], loc='upper left')
+        plt.show()
+
